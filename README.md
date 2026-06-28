@@ -6,11 +6,6 @@ for high-severity events.
 
 > Built for the CodeAlpha Cyber Security Internship — Task 4.
 
-📌 **Ready to upload to GitHub and post on LinkedIn? See:**
-- `docs/github_upload_guide.md` — step-by-step GitHub upload (no command line needed)
-- `docs/linkedin_and_repo_description.md` — ready-to-use LinkedIn post + repo description
-- `docs/detections_writeup.md` — explanation of every rule, with confirmed test results
-
 ## Live Dashboard
 
 ![Dashboard with all detections](docs/screenshots/07_dashboard_final_all_detections.png)
