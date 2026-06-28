@@ -1,0 +1,63 @@
+# custom.rules
+# Hand-written Suricata detection rules for the CodeAlpha NIDS project.
+# SID range 9000000-9000099 reserved for this project to avoid clashing with
+# the default Emerging Threats ruleset.
+
+# --- Reconnaissance ---
+
+# Detect classic Nmap SYN/connect-style port scan (many SYNs to many ports, short window)
+alert tcp any any -> $HOME_NET any (msg:"CUSTOM Possible TCP Port Scan Detected"; \
+  flags:S; threshold:type both, track by_src, count 20, seconds 10; \
+  classtype:attempted-recon; sid:9000001; rev:1;)
+
+# Detect ICMP sweep (host discovery)
+alert icmp any any -> $HOME_NET any (msg:"CUSTOM ICMP Ping Sweep Detected"; \
+  itype:8; threshold:type both, track by_src, count 10, seconds 10; \
+  classtype:attempted-recon; sid:9000002; rev:1;)
+
+# Detect Nmap's default OS-fingerprint TCP flag combo (NULL/FIN/Xmas scan style)
+alert tcp any any -> $HOME_NET any (msg:"CUSTOM NULL/FIN/Xmas Scan Flags Detected"; \
+  flags:0; classtype:attempted-recon; sid:9000003; rev:1;)
+alert tcp any any -> $HOME_NET any (msg:"CUSTOM Xmas Scan Flags Detected"; \
+  flags:FPU; classtype:attempted-recon; sid:9000004; rev:1;)
+
+# --- Brute force ---
+
+# Detect repeated SSH connection attempts from same source (possible brute force)
+alert tcp any any -> $HOME_NET 22 (msg:"CUSTOM Possible SSH Brute Force"; \
+  flags:S; threshold:type both, track by_src, count 8, seconds 30; \
+  classtype:attempted-admin; sid:9000010; rev:1;)
+
+# Detect repeated FTP login attempts
+alert tcp any any -> $HOME_NET 21 (msg:"CUSTOM Possible FTP Brute Force"; \
+  content:"USER"; nocase; threshold:type both, track by_src, count 6, seconds 30; \
+  classtype:attempted-admin; sid:9000011; rev:1;)
+
+# --- Suspicious / known-bad indicators ---
+
+# Detect plaintext HTTP Basic Auth credentials in transit (security hygiene flag)
+alert http any any -> any any (msg:"CUSTOM Plaintext HTTP Basic Auth Credentials Seen"; \
+  content:"Authorization: Basic"; http_header; \
+  classtype:policy-violation; sid:9000020; rev:1;)
+
+# Detect outbound DNS query for a suspicious/unusually long subdomain (possible DNS tunneling/exfil)
+alert dns any any -> any any (msg:"CUSTOM Possible DNS Tunneling - Long Subdomain"; \
+  dns.query; pcre:"/^[a-zA-Z0-9]{40,}\./"; \
+  classtype:trojan-activity; sid:9000021; rev:1;)
+
+# Detect common SQL injection pattern in HTTP request
+alert http any any -> $HOME_NET any (msg:"CUSTOM Possible SQL Injection Attempt"; \
+  content:"union"; nocase; http_uri; content:"select"; nocase; http_uri; distance:0; \
+  classtype:web-application-attack; sid:9000022; rev:1;)
+
+# Detect directory traversal attempt
+alert http any any -> $HOME_NET any (msg:"CUSTOM Possible Directory Traversal Attempt"; \
+  content:"../../"; http_uri; \
+  classtype:web-application-attack; sid:9000023; rev:1;)
+
+# --- Malware / C2-style behavior ---
+
+# Detect unusually large number of connections to a single external IP in short window (possible C2 beacon / exfil)
+alert tcp $HOME_NET any -> any any (msg:"CUSTOM Possible C2 Beaconing Pattern"; \
+  flags:S; threshold:type both, track by_dst, count 30, seconds 60; \
+  classtype:trojan-activity; sid:9000030; rev:1;)

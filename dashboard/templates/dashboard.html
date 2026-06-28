@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>NIDS // Console</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root{
+    --bg: #0b0f0d;
+    --panel: #111613;
+    --line: #233129;
+    --text: #d9e3da;
+    --dim: #6f8579;
+    --high: #ff5d3a;
+    --med: #f2b84b;
+    --low: #4fb286;
+    --mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family: var(--mono);
+    font-size:14px;
+  }
+  header{
+    display:flex; align-items:baseline; justify-content:space-between;
+    padding:18px 28px; border-bottom:1px solid var(--line);
+  }
+  header h1{
+    font-size:16px; letter-spacing:0.12em; margin:0; font-weight:600;
+    text-transform:uppercase;
+  }
+  header h1 span{ color: var(--low); }
+  #clock{ color:var(--dim); font-size:12px; }
+
+  .pulse{
+    display:inline-block; width:8px; height:8px; border-radius:50%;
+    background:var(--low); margin-right:8px; vertical-align:middle;
+    animation: blink 1.6s infinite;
+  }
+  @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:0.25;} }
+
+  main{ padding:24px 28px; display:grid; grid-template-columns: 2fr 1fr; gap:20px; }
+  @media(max-width:900px){ main{ grid-template-columns:1fr; } }
+
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:4px;
+    padding:16px 18px;
+  }
+  .panel h2{
+    font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--dim);
+    margin:0 0 12px 0; font-weight:600;
+  }
+
+  .stat-row{ display:flex; gap:12px; margin-bottom:20px; grid-column:1/-1; }
+  .stat{
+    flex:1; background:var(--panel); border:1px solid var(--line); border-radius:4px;
+    padding:14px 16px;
+  }
+  .stat .num{ font-size:28px; font-weight:700; }
+  .stat .label{ color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:0.08em; margin-top:4px;}
+  .stat.high .num{ color:var(--high); }
+  .stat.med .num{ color:var(--med); }
+  .stat.low .num{ color:var(--low); }
+
+  table{ width:100%; border-collapse:collapse; }
+  th{ text-align:left; color:var(--dim); font-size:11px; text-transform:uppercase;
+      letter-spacing:0.05em; padding:6px 8px; border-bottom:1px solid var(--line); }
+  td{ padding:7px 8px; border-bottom:1px solid #182019; font-size:12.5px; }
+  tr:hover td{ background:#141b16; }
+
+  .tier{ padding:2px 8px; border-radius:3px; font-size:10px; font-weight:700; letter-spacing:0.05em; }
+  .tier.HIGH{ background:rgba(255,93,58,0.12); color:var(--high); }
+  .tier.MEDIUM{ background:rgba(242,184,75,0.12); color:var(--med); }
+  .tier.LOW{ background:rgba(79,178,134,0.12); color:var(--low); }
+
+  .bar-row{ display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12px; }
+  .bar-label{ width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+  .bar-track{ flex:1; height:8px; background:#182019; border-radius:2px; overflow:hidden; }
+  .bar-fill{ height:100%; background:var(--low); }
+  .bar-count{ width:30px; text-align:right; color:var(--dim); }
+
+  .empty{ color:var(--dim); font-size:12px; padding:12px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="pulse"></span>NIDS // <span>Live Console</span></h1>
+  <div id="clock"></div>
+</header>
+
+<main>
+  <div class="stat-row">
+    <div class="stat"><div class="num" id="stat-total">0</div><div class="label">Total Alerts</div></div>
+    <div class="stat high"><div class="num" id="stat-high">0</div><div class="label">High Severity</div></div>
+    <div class="stat med"><div class="num" id="stat-med">0</div><div class="label">Medium Severity</div></div>
+    <div class="stat low"><div class="num" id="stat-low">0</div><div class="label">Low Severity</div></div>
+  </div>
+
+  <div class="panel">
+    <h2>Live Alert Feed</h2>
+    <table>
+      <thead>
+        <tr><th>Time</th><th>Severity</th><th>Signature</th><th>Source</th><th>Dest</th><th>Hits</th></tr>
+      </thead>
+      <tbody id="alert-rows"><tr><td colspan="6" class="empty">No alerts yet — run the log pipeline against eve.json.</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>Top Source IPs</h2>
+    <div id="top-ips"><div class="empty">No data yet.</div></div>
+    <h2 style="margin-top:20px;">Top Signatures</h2>
+    <div id="top-sigs"><div class="empty">No data yet.</div></div>
+  </div>
+</main>
+
+<script>
+function fmtTime(){
+  document.getElementById('clock').textContent = new Date().toISOString().replace('T',' ').slice(0,19) + ' UTC';
+}
+setInterval(fmtTime, 1000); fmtTime();
+
+function renderBars(containerId, entries, maxFor){
+  const el = document.getElementById(containerId);
+  if(!entries || entries.length === 0){
+    el.innerHTML = '<div class="empty">No data yet.</div>';
+    return;
+  }
+  const max = Math.max(...entries.map(e => e[1]));
+  el.innerHTML = entries.map(([label, count]) => `
+    <div class="bar-row">
+      <div class="bar-label">${label ?? 'n/a'}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(count/max*100).toFixed(0)}%"></div></div>
+      <div class="bar-count">${count}</div>
+    </div>`).join('');
+}
+
+async function refresh(){
+  try{
+    const [alertsRes, summaryRes] = await Promise.all([
+      fetch('/api/alerts'), fetch('/api/summary')
+    ]);
+    const alerts = await alertsRes.json();
+    const summary = await summaryRes.json();
+
+    document.getElementById('stat-total').textContent = summary.total_alerts ?? 0;
+    document.getElementById('stat-high').textContent = (summary.severity_counts || {}).HIGH ?? 0;
+    document.getElementById('stat-med').textContent = (summary.severity_counts || {}).MEDIUM ?? 0;
+    document.getElementById('stat-low').textContent = (summary.severity_counts || {}).LOW ?? 0;
+
+    renderBars('top-ips', summary.top_src_ips);
+    renderBars('top-sigs', summary.top_signatures);
+
+    const rows = document.getElementById('alert-rows');
+    if(alerts.length === 0){
+      rows.innerHTML = '<tr><td colspan="6" class="empty">No alerts yet — run the log pipeline against eve.json.</td></tr>';
+    } else {
+      rows.innerHTML = alerts.map(a => `
+        <tr>
+          <td>${(a.timestamp || '').replace('T',' ').slice(0,19)}</td>
+          <td><span class="tier ${a.severity_tier}">${a.severity_tier}</span></td>
+          <td>${a.signature ?? ''}</td>
+          <td>${a.src_ip ?? ''}${a.src_port ? ':' + a.src_port : ''}</td>
+          <td>${a.dest_ip ?? ''}${a.dest_port ? ':' + a.dest_port : ''}</td>
+          <td>${a.hit_count ?? 1}</td>
+        </tr>`).join('');
+    }
+  } catch(e){
+    console.error('refresh failed', e);
+  }
+}
+refresh();
+setInterval(refresh, 5000);
+</script>
+
+</body>
+</html>
